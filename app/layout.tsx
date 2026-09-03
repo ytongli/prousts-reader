@@ -1,0 +1,4 @@
+import type { Metadata } from 'next';
+import './globals.css';
+export const metadata: Metadata = {title:'Proust’s Reader — A closer reading',description:'Stay inside the original. Explore Proust through sentence spines, nested phrases, and plain-English guidance.',icons:{icon:'/favicon.svg'},openGraph:{title:'Proust’s Reader',description:'Unfold the sentence. Stay in the book.',url:'https://sentence-atelier.ytongli.chatgpt.site',images:[{url:'https://sentence-atelier.ytongli.chatgpt.site/og.png',width:1732,height:909,alt:'Proust’s Reader — Unfold the sentence. Stay in the book.'}]},twitter:{card:'summary_large_image',title:'Proust’s Reader',description:'Unfold the sentence. Stay in the book.',images:['https://sentence-atelier.ytongli.chatgpt.site/og.png']}};
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>;}

@@ -16,7 +16,7 @@ test('native registry exposes real callbacks, marks actual calls, and cleans up'
  const registry=new Map(),status=[];environment(t,{modelContext:{registerTool:tool=>registry.set(tool.name,tool),unregisterTool:name=>registry.delete(name)}});
  const reader=createReader('The trees swayed gently.');reader.select({start:0,end:reader.getSnapshot().text.length});
  const close=registerReaderTools(reader,s=>status.push(s));await flush();
- assert.equal(registry.size,10);assert.equal(status.at(-1),WEBMCP_READY);
+ assert.equal(registry.size,8);assert.equal(status.at(-1),WEBMCP_READY);
  const result=await registry.get('get_selected_sentence').execute({});assert.equal(JSON.parse(result.content[0].text).selection.text,'The trees swayed gently.');assert.equal(status.at(-1),WEBMCP_USED);
  close();assert.equal(registry.size,0);
 });
@@ -28,7 +28,7 @@ test('late browser API is discovered without reloading',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});const doc={},registry=new Map();environment(t,doc);
  const status=[];const close=registerReaderTools(createReader(),s=>status.push(s));assert.match(status.at(-1),/compatible browser/);
  doc.modelContext={registerTool:tool=>registry.set(tool.name,tool),unregisterTool:name=>registry.delete(name)};
- t.mock.timers.tick(1500);await flush();assert.equal(registry.size,10);assert.equal(status.at(-1),WEBMCP_READY);close();
+ t.mock.timers.tick(1500);await flush();assert.equal(registry.size,8);assert.equal(status.at(-1),WEBMCP_READY);close();
 });
 test('sentence offsets remain exact after emoji and on a non-example sentence',()=>{
  const text='🌙 Night came. The trees swayed gently.';const reader=createReader(text);reader.select({start:text.indexOf('The'),end:text.length});

@@ -31,6 +31,5 @@ test("serves the EPUB reader shell without a duplicate demo paragraph", async ()
   assert.match(html, /Open EPUB/);
   assert.match(html, /Opening your book/);
   assert.match(html, /The Way by Swann/);
-  assert.doesNotMatch(html, /savour in a momentary glimmer/);
   assert.doesNotMatch(html, /role="dialog"/);
 });

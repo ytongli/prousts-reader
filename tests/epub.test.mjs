@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {unzipSync,zipSync,strToU8,strFromU8} from 'fflate';
 import {DOMParser} from '@xmldom/xmldom';
 import {parseEpub,resolveEpubPath} from '../lib/epub.ts';
-import {createReader,runExample,words} from '../lib/reader.ts';
+import {createReader,words} from '../lib/reader.ts';
 const bytes=readFileSync(new URL('../public/books/the-way-by-swanns.epub',import.meta.url));
 const book=parseEpub(bytes);
 test('the attached EPUB contains the full volume, contents, and original opening',()=>{
@@ -32,9 +32,9 @@ test('the pre-loaded opening supports exact reader selection without changing it
  const s=r.getSnapshot();assert.equal(words(s.selection,s.text),sentence);assert.equal(s.text,page.text);assert.equal(s.components.length,0);
 });
 test('new pages reject stale mutations and expose their own sentence/context',()=>{
- const r=createReader('');const first=book.pages[13],next=book.pages[73];r.loadDocument({text:first.text,documentId:first.id});runExample(r);const old=r.getSnapshot().revision;
+ const r=createReader('');const first=book.pages[13],next=book.pages[73];r.loadDocument({text:first.text,documentId:first.id});r.select({start:0,end:Math.min(20,first.text.length)});const old=r.getSnapshot().revision;
  r.loadDocument({text:next.text,documentId:next.id,before:first.text.slice(-100)});r.select({start:0,end:Math.min(20,next.text.length)});
- assert.equal(r.run('add_margin_annotation',{revision:old,text:'wrong page'}).isError,true);
+ assert.equal(r.run('show_plain_meaning',{revision:old,paraphrase:'wrong page'}).isError,true);assert.equal(r.getSnapshot().plainMeaning,null);
  const context=JSON.parse(r.run('get_surrounding_context',{}).content[0].text);assert.equal(context.documentId,next.id);assert.equal(context.text,next.text);assert.equal(context.before,first.text.slice(-100));assert.equal(r.getSnapshot().components.length,0);
 });
 function minimal(chapter){return zipSync({'mimetype':strToU8('application/epub+zip'),'META-INF/container.xml':strToU8('<container><rootfiles><rootfile full-path="book.opf"/></rootfiles></container>'),'book.opf':strToU8('<package><metadata><title>Test Book</title><creator>Test Author</creator></metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="text" href="text.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="text"/></spine></package>'),'nav.xhtml':strToU8('<html><body><nav><ol><li><a href="text.xhtml#start">Chapter One</a></li></ol></nav></body></html>'),'text.xhtml':strToU8(chapter)});}

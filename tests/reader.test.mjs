@@ -1,78 +1,52 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createReader,runExample,reorderExample,locate,words,shouldClearSentenceHighlight,TEXT,DEFAULT_SELECTION,sampleReferences,schemas,jsonSchemas} from '../lib/reader.ts';
-test('exact pre-loaded selection and inherited subject survive analysis',()=>{
- const r=createReader();runExample(r);const s=r.getSnapshot();
- assert.equal(words(s.selection).startsWith('savour in a momentary glimmer'),true);
- assert.equal(words(s.selection).endsWith('return to share'),true);
- assert.deepEqual(s.components.map(c=>words(c.range)),['I','savour','the sleep']);
- assert.equal(s.components[0].inherited,true);assert.equal(s.structures.length,4);assert.equal(s.trace.every(t=>t.ok),true);
+import {createReader,words,shouldClearSentenceHighlight,schemas,jsonSchemas} from '../lib/reader.ts';
+
+const TEXT='Across the harbor sailed the boats that the lantern guided.';
+const locate=(needle,from=0)=>{const start=TEXT.indexOf(needle,from);if(start<0)throw new Error('Missing fixture text');return {start,end:start+needle.length};};
+const selection={start:0,end:TEXT.length};
+const outer={id:'guided',range:locate('that the lantern guided.'),attachesTo:locate('the boats'),guide:'which boats are meant',meaning:'These are the boats guided by the lantern.'};
+const inner={id:'lantern',range:locate('the lantern'),attachesTo:locate('guided'),guide:'what did the guiding',meaning:'The lantern did the guiding.'};
+const components=[{role:'subject',range:locate('the boats')},{role:'predicate',range:locate('sailed')},{role:'complement',range:locate('Across the harbor')}];
+const chunks=[{range:locate('the boats')},{range:locate('sailed')},{range:locate('Across the harbor')},{range:locate('that the lantern guided.')}];
+function analyzed(){const reader=createReader(TEXT);reader.select(selection);const revision=reader.getSnapshot().revision;reader.run('mark_spine',{revision,components});reader.run('unfold_nested_structure',{revision,structures:[outer,inner]});return reader;}
+
+test('a reader begins with no analysis or selection',()=>{
+ const state=createReader(TEXT).getSnapshot();assert.equal(state.text,TEXT);assert.deepEqual(state.selection,{start:0,end:0});assert.equal(state.components.length,0);assert.equal(state.structures.length,0);
 });
-test('expanding nested structure restores its ancestor, collapsing preserves child state',()=>{
- const r=createReader();runExample(r);const revision=r.getSnapshot().revision;
- r.run('expand_modifier',{revision,id:'part'});assert.equal(r.getSnapshot().structures.filter(s=>s.expanded).length,2);
- r.run('collapse_modifier',{revision,id:'sleep'});assert.equal(r.getSnapshot().structures.find(s=>s.id==='part').expanded,true);
+test('marking the spine and nested structures preserves exact source text',()=>{
+ const state=analyzed().getSnapshot();assert.deepEqual(state.components.map(component=>words(component.range,state.text)),['the boats','sailed','Across the harbor']);assert.equal(state.structures.length,2);assert.equal(state.text,TEXT);assert.equal(state.trace.every(entry=>entry.ok),true);
+});
+test('expanding a nested structure restores its ancestor',()=>{
+ const reader=analyzed(),revision=reader.getSnapshot().revision;reader.run('expand_modifier',{revision,id:'lantern'});assert.equal(reader.getSnapshot().structures.filter(structure=>structure.expanded).length,2);reader.run('collapse_modifier',{revision,id:'guided'});assert.equal(reader.getSnapshot().structures.find(structure=>structure.id==='lantern').expanded,true);
 });
 test('the most recently opened modifier receives the newest explanation order',()=>{
- const r=createReader();runExample(r);const revision=r.getSnapshot().revision;
- r.run('expand_modifier',{revision,id:'glimmer'});const first=r.getSnapshot().structures.find(s=>s.id==='glimmer').openedAt;
- r.run('expand_modifier',{revision,id:'sleep'});const second=r.getSnapshot().structures.find(s=>s.id==='sleep').openedAt;
- assert.ok(second>first);
- r.run('collapse_modifier',{revision,id:'glimmer'});r.run('expand_modifier',{revision,id:'glimmer'});
- assert.ok(r.getSnapshot().structures.find(s=>s.id==='glimmer').openedAt>second);
+ const reader=analyzed(),revision=reader.getSnapshot().revision;reader.run('expand_modifier',{revision,id:'guided'});const first=reader.getSnapshot().structures.find(structure=>structure.id==='guided').openedAt;reader.run('expand_modifier',{revision,id:'lantern'});const second=reader.getSnapshot().structures.find(structure=>structure.id==='lantern').openedAt;assert.ok(second>first);reader.run('collapse_modifier',{revision,id:'guided'});reader.run('expand_modifier',{revision,id:'guided'});assert.ok(reader.getSnapshot().structures.find(structure=>structure.id==='guided').openedAt>second);
 });
-test('reference lookup works without analysis and opens all containing layers',()=>{
- const r=createReader();let revision=r.getSnapshot().revision;
- assert.equal(r.run('trace_references',{revision,...sampleReferences[2]}).isError,undefined);
- assert.equal(words(r.getSnapshot().reference.target),'that whole');
- runExample(r);revision=r.getSnapshot().revision;r.run('trace_references',{revision,...sampleReferences[2]});
- assert.equal(r.getSnapshot().structures.find(s=>s.id==='return').expanded,true);assert.equal(r.getSnapshot().structures.find(s=>s.id==='sleep').expanded,true);
+test('stale selections cannot receive old agent mutations',()=>{
+ const reader=analyzed(),revision=reader.getSnapshot().revision;reader.select(locate('the boats'));assert.equal(reader.run('show_plain_meaning',{revision,paraphrase:'stale'}).isError,true);assert.equal(reader.getSnapshot().plainMeaning,null);assert.equal(reader.run('expand_modifier',{revision:reader.getSnapshot().revision,id:'guided'}).isError,true);
 });
-test('stale selection cannot receive old agent annotations',()=>{
- const r=createReader();runExample(r);const revision=r.getSnapshot().revision;r.select(locate('whose'));
- assert.equal(r.run('add_margin_annotation',{revision,text:'stale'}).isError,true);assert.equal(r.getSnapshot().notes.length,0);
- assert.equal(r.run('expand_modifier',{revision:r.getSnapshot().revision,id:'part'}).isError,true);
+test('bad overlaps and missing prerequisites do not alter the document',()=>{
+ const reader=createReader(TEXT);reader.select(selection);let revision=reader.getSnapshot().revision;assert.equal(reader.run('unfold_nested_structure',{revision,structures:[outer]}).isError,true);reader.run('mark_spine',{revision,components});assert.equal(reader.run('unfold_nested_structure',{revision,structures:[{...outer,range:locate('the boats that')}]}).isError,true);assert.equal(reader.getSnapshot().structures.length,0);assert.equal(reader.getSnapshot().text,TEXT);
 });
-test('bad ranges, overlaps and missing prerequisites cannot alter the document',()=>{
- const r=createReader();const revision=r.getSnapshot().revision;
- assert.equal(r.run('reorder_syntax',{revision,chunks:[{range:DEFAULT_SELECTION}]}).isError,undefined);
- assert.equal(r.run('trace_references',{revision,source:{start:0,end:TEXT.length+1},target:locate('the sleep'),explanation:'bad'}).isError,true);
- runExample(r);const v=r.getSnapshot().revision;
- assert.equal(r.run('unfold_nested_structure',{revision:v,structures:[{id:'bad',range:locate('the sleep'),attachesTo:locate('savour'),guide:'what this describes',meaning:'bad'}]}).isError,true);
- assert.equal(r.getSnapshot().structures.length,4);
+test('reordering uses every exact source chunk once',()=>{
+ const reader=analyzed(),revision=reader.getSnapshot().revision;assert.equal(reader.run('reorder_syntax',{revision,chunks}).isError,undefined);const state=reader.getSnapshot();assert.deepEqual(state.reordered.map(chunk=>words(chunk.range,state.text)),['the boats','sailed','Across the harbor','that the lantern guided.']);assert.equal(state.structures.every(structure=>structure.expanded),true);
 });
-test('reordered version only uses exact source chunks',()=>{
- const r=createReader();runExample(r);reorderExample(r);const s=r.getSnapshot();
- assert.equal(s.trace.at(-1).ok,true);assert.equal(s.reordered.length,8);
- assert.deepEqual(s.reordered.slice(0,3).map(c=>words(c.range)),['savour','the sleep','in a momentary glimmer of consciousness']);
- assert.equal(s.selection.start,DEFAULT_SELECTION.start);
+test('reordering rejects missing or repeated source words',()=>{
+ const reader=analyzed(),revision=reader.getSnapshot().revision;assert.equal(reader.run('reorder_syntax',{revision,chunks:[{range:locate('sailed')}]}).isError,true);assert.equal(reader.run('reorder_syntax',{revision,chunks:[...chunks,{range:locate('sailed')}]}).isError,true);assert.equal(reader.getSnapshot().reordered,null);
 });
-test('tool schemas cover the same public vocabulary and reject unknown fields',()=>{
- assert.deepEqual(Object.keys(schemas),Object.keys(jsonSchemas));
- const r=createReader();assert.equal(r.run('get_selected_sentence',{injected:'value'}).isError,true);
- const response=r.run('get_selected_sentence',{});assert.equal(JSON.parse(response.content[0].text).text,TEXT);
+test('tool schemas expose only the eight supported capabilities',()=>{
+ assert.deepEqual(Object.keys(schemas),Object.keys(jsonSchemas));assert.deepEqual(Object.keys(schemas),['get_selected_sentence','get_surrounding_context','mark_spine','unfold_nested_structure','collapse_modifier','expand_modifier','reorder_syntax','show_plain_meaning']);const reader=createReader(TEXT);assert.equal(reader.run('get_selected_sentence',{injected:'value'}).isError,true);
 });
-test('nested structures require reader guidance and plain meaning instead of grammar labels',()=>{
- const r=createReader();const revision=r.getSnapshot().revision;
- r.run('mark_spine',{revision,components:[{role:'predicate',range:locate('savour')},{role:'object',range:locate('the sleep')}]});
- const range=locate('in a momentary glimmer of consciousness');
- assert.equal(r.run('unfold_nested_structure',{revision,structures:[{id:'old',range,attachesTo:locate('savour'),label:'Prepositional phrase',explanation:'A grammar label.'}]}).isError,true);
- const result=r.run('unfold_nested_structure',{revision,structures:[{id:'new',range,attachesTo:locate('savour'),guide:'when this awareness happens',meaning:'The awareness lasts only a moment.'}]});
- assert.equal(result.isError,undefined);assert.equal(r.getSnapshot().structures[0].guide,'when this awareness happens');
+test('selected sentence results expose exact text and token offsets',()=>{
+ const reader=createReader(TEXT);reader.select(selection);const data=JSON.parse(reader.run('get_selected_sentence',{}).content[0].text);assert.equal(data.selection.text,TEXT);for(const token of data.sentenceTokens)assert.equal(TEXT.slice(token.start,token.end),token.text);
 });
-test('plain meaning stays separate from the original text and needs no spine',()=>{
- const r=createReader();const revision=r.getSnapshot().revision;
- const result=r.run('show_plain_meaning',{revision,paraphrase:'He briefly becomes aware of the sleeping room around him.'});
- assert.equal(result.isError,undefined);assert.equal(r.getSnapshot().plainMeaning,'He briefly becomes aware of the sleeping room around him.');
- assert.equal(r.getSnapshot().text,TEXT);assert.equal(r.getSnapshot().components.length,0);
+test('plain meaning stays separate from the original and needs no spine',()=>{
+ const reader=createReader(TEXT);reader.select(selection);const revision=reader.getSnapshot().revision;assert.equal(reader.run('show_plain_meaning',{revision,paraphrase:'Boats crossed the harbor, guided by a lantern.'}).isError,undefined);assert.equal(reader.getSnapshot().plainMeaning,'Boats crossed the harbor, guided by a lantern.');assert.equal(reader.getSnapshot().text,TEXT);assert.equal(reader.getSnapshot().components.length,0);
 });
-test('restore returns original text and ends every part of structural analysis',()=>{
- const r=createReader();runExample(r);reorderExample(r);r.run('show_plain_meaning',{revision:r.getSnapshot().revision,paraphrase:'A plain meaning.'});
- r.reset();const s=r.getSnapshot();
- assert.equal(s.text,TEXT);assert.deepEqual(s.selection,{start:0,end:0});assert.equal(s.reordered,null);assert.equal(s.components.length,0);assert.equal(s.structures.length,0);assert.equal(s.reference,null);assert.equal(s.plainMeaning,null);assert.equal(s.notes.length,0);assert.equal(s.focus,null);
+test('restore returns the original text and ends structural analysis',()=>{
+ const reader=analyzed();reader.run('reorder_syntax',{revision:reader.getSnapshot().revision,chunks});reader.run('show_plain_meaning',{revision:reader.getSnapshot().revision,paraphrase:'A plain meaning.'});reader.reset();const state=reader.getSnapshot();assert.equal(state.text,TEXT);assert.deepEqual(state.selection,{start:0,end:0});assert.equal(state.reordered,null);assert.equal(state.components.length,0);assert.equal(state.structures.length,0);assert.equal(state.plainMeaning,null);assert.equal(state.focus,null);
 });
-test('a completed text selection survives its click while a later empty click clears it',()=>{
- assert.equal(shouldClearSentenceHighlight(false,true),false);
- assert.equal(shouldClearSentenceHighlight(true,true),true);
- assert.equal(shouldClearSentenceHighlight(true,false),false);
+test('a completed selection survives its click while a later empty click clears it',()=>{
+ assert.equal(shouldClearSentenceHighlight(false,true),false);assert.equal(shouldClearSentenceHighlight(true,true),true);assert.equal(shouldClearSentenceHighlight(true,false),false);
 });

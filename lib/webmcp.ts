@@ -5,7 +5,7 @@ type ModelContext = { registerTool:(tool:Tool,options?:{signal:AbortSignal})=>vo
 export const WEBMCP_READY = 'WebMCP tools available';
 export const WEBMCP_USED = 'WebMCP · agent has called';
 const titles:Record<ToolName,string>={
- get_selected_sentence:'Read selected sentence',get_surrounding_context:'Read surrounding context',mark_spine:'Mark sentence spine',unfold_nested_structure:'Unfold nested structure',collapse_modifier:'Collapse structure',expand_modifier:'Expand structure',trace_references:'Trace reference',reorder_syntax:'Reorder syntax',show_plain_meaning:'Show plain meaning',add_margin_annotation:'Add structural note'
+ get_selected_sentence:'Read selected sentence',get_surrounding_context:'Read surrounding context',mark_spine:'Mark sentence spine',unfold_nested_structure:'Unfold nested structure',collapse_modifier:'Collapse structure',expand_modifier:'Expand structure',reorder_syntax:'Reorder syntax',show_plain_meaning:'Show plain meaning'
 };
 
 // Return cleanup immediately so a React unmount can cancel in-flight registration.

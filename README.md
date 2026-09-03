@@ -1,44 +1,51 @@
 # Proust’s Reader
 
-An EPUB reader with an agent-controlled reading surface. The attached Project Gutenberg edition of **Swann’s Way** is pre-loaded from `public/books/the-way-by-swanns.epub`.
+An EPUB reader with an agent-controlled reading surface. The Project Gutenberg edition of **Swann’s Way** is pre-loaded from `public/books/the-way-by-swanns.epub`.
 
 ## Reading
 
-The reader opens in Overture on first use. Contents includes the book’s front matter, all three parts, and the Project Gutenberg license. Previous/Next moves through 152 reflowed reader pages, preserving original paragraph boundaries. These are reader pages, not print page numbers. Internal links navigate to their targets and offer Return to reading. Emphasis, superscripts, illustrations and links are rendered from sanitized EPUB structures.
+The reader opens in Overture on first use. Contents includes the book’s front matter, all three parts, and the Project Gutenberg license. Previous/Next moves through 152 reflowed reader pages, preserving original paragraph boundaries. These are reader pages, not print page numbers. Internal links navigate to their targets and offer Return to reading. Emphasis, superscripts, illustrations, and links are rendered from sanitized EPUB structures.
 
 **Open EPUB** imports another unencrypted EPUB locally. The latest imported file and reading position are remembered in the browser through IndexedDB and localStorage. No upload endpoint or AI backend is involved. Import errors preserve the open book. All EPUB parsing uses the same client-compatible code exercised by tests.
 
+The reader starts with the public-domain book, and readers may open their own EPUB files in their browser. No commercial edition is bundled.
+
 ## Inline tools
 
-Select a phrase within a paragraph. A compatible external WebMCP agent can read the actual selected sentence and context, mark the spine, fold and expand modifiers, link references, rearrange source phrases, and add notes directly in the original text. No reading popup or duplicate sentence is used. Native text selection maps back to immutable source coordinates after folding and reordering.
+Select a phrase within a paragraph. A compatible external WebMCP agent can read the selected sentence and context, mark the sentence spine, fold and expand major nested structures, rearrange source phrases, and show a concise plain-English meaning. The help stays in or immediately beneath the original text; there is no duplicate-sentence popup. Native text selection maps back to immutable source coordinates after folding and reordering.
 
-The prepared example remains in its original paragraph within Combray. **Try the prepared passage** navigates there and runs the authored analysis. It is labeled as prepared, not live inference. Other sentences require an external WebMCP agent. The reader itself does not call an AI model.
+The eight WebMCP tools are:
 
-Tools: `get_selected_sentence`, `get_surrounding_context`, `show_sentence_spine`, `show_modifier`, `collapse_modifier`, `expand_modifier`, `link_reference_to_antecedent`, `reorder_for_clarity`, `add_margin_annotation`.
+- `get_selected_sentence`
+- `get_surrounding_context`
+- `mark_spine`
+- `unfold_nested_structure`
+- `collapse_modifier`
+- `expand_modifier`
+- `reorder_syntax`
+- `show_plain_meaning`
 
-Read tools return current-page text, its document ID, selection, focused sub-selection, containing sentence, neighboring-page context, and a revision. Offsets are UTF-16, start inclusive and end exclusive, relative to that page. Mutations require the revision; navigating to another page invalidates stale calls. References must identify target ranges on the current page; neighboring pages are available as read-only context. Each page's active analysis is retained while navigating in the current session. Reading location persists after refresh; annotations do not.
+Read tools return current-page text, its document ID, selection, focused sub-selection, containing sentence, neighboring-page context, and a revision. They also provide `sentenceTokens` with exact UTF-16 word offsets. Offsets are UTF-16, start inclusive and end exclusive, relative to the current page. Mutations require the current revision; navigating to another page invalidates stale calls. Each page’s active analysis is retained while navigating in the current session. Reading location persists after refresh; annotations do not.
 
-`lib/webmcp.ts` registers through `document.modelContext`, falling back to `navigator.modelContext`. No fake polyfill or simulated agent is installed. Registration retries when the browser API arrives late and cleans up on unmount. The status distinguishes registered tools from an actual agent invocation. Connection details provide a retry control and a copyable instruction. Live browser discovery and native WebMCP calls were verified on an unprepared sentence in Combray. Grammar is supplied by the calling agent; correctness is not guaranteed for every sentence.
+`lib/webmcp.ts` registers through `document.modelContext`, falling back to `navigator.modelContext`. No fake polyfill or simulated agent is installed. Registration retries when the browser API arrives late and cleans up on unmount. The status distinguishes registered tools from an actual agent invocation. Grammar and paraphrases are supplied by the calling agent; correctness is not guaranteed for every sentence.
 
-To use it, open the reader in the ChatGPT desktop app’s built-in browser with a supported model (currently GPT-5.6 Sol or Terra), inspect **Site tools → Available site tools**, highlight a sentence and ask the agent to untangle it. The reader’s Untangle button preserves selection and explains the next step; it does not launch an embedded model. See https://learn.chatgpt.com/docs/webmcp.
-
-Read results also provide sentenceTokens with exact UTF-16 word offsets to reduce range-counting errors.
+To use the tools, open the reader in a browser with WebMCP support, highlight a sentence, and ask the connected agent for the smallest kind of help needed. The agent should begin with structural assistance and paraphrase only when necessary.
 
 ## Implementation
 
-- `lib/epub.ts`: bounded ZIP import, EPUB 2/3 package/spine/navigation parsing, source blocks and internal targets.
+- `lib/epub.ts`: bounded ZIP import, EPUB 2/3 package/spine/navigation parsing, source blocks, and internal targets.
 - `lib/book-storage.ts`: local EPUB persistence.
-- `lib/reader.ts`: validated document-specific tool state and prepared analysis.
+- `lib/reader.ts`: validated document-specific tool state.
 - `lib/passage.ts`, `components/reading-passage.tsx`: inline transformations and stable source offsets.
-- `app/page.tsx`, `app/globals.css`: reading interface, navigation, position recall.
+- `app/page.tsx`, `app/globals.css`: reading interface, navigation, and position recall.
 
-Imported HTML is never inserted through `innerHTML`. Scripts, embedded frames, remote images and unsafe URL schemes are excluded; React renders book content as structured text and local raster images. Custom entity definitions and encrypted text resources are rejected. The pre-loaded book's complete body text is verified against every spine document.
+Imported HTML is never inserted through `innerHTML`. Scripts, embedded frames, remote images, and unsafe URL schemes are excluded; React renders book content as structured text and local raster images. Custom entity definitions and encrypted text resources are rejected. The pre-loaded book’s complete body text is verified against every spine document.
 
 ## Validation
 
 `npm run install:ci`
 
-`node --experimental-strip-types --test tests/reader.test.mjs tests/passage.test.mjs tests/epub.test.mjs`
+`node --experimental-strip-types --test tests/reader.test.mjs tests/passage.test.mjs tests/epub.test.mjs tests/webmcp.test.mjs`
 
 `npm run build`
 
